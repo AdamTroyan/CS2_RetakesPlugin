@@ -13,7 +13,7 @@ namespace RetakesPlugin
     public class Retake : BasePlugin
     {
         public override string ModuleName => "Retake Plugin";
-        public override string ModuleVersion => "1.0";
+        public override string ModuleVersion => "1.1";
 
         bool _isRetakeActive = false;
         bool _isBombPlanted = false;
