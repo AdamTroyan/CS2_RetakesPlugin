@@ -1,0 +1,37 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\pover\\Desktop\\Projects\\Cs2\\RetakesPlugin\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{7EB87FDF-3039-4E65-9430-1ABF9BBCBE91}|RetakesPlugin\\RetakesPlugin.csproj|c:\\users\\pover\\desktop\\projects\\cs2\\retakesplugin\\retakesplugin\\retake.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7EB87FDF-3039-4E65-9430-1ABF9BBCBE91}|RetakesPlugin\\RetakesPlugin.csproj|solutionrelative:retakesplugin\\retake.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "Retake.cs",
+              "DocumentMoniker": "C:\\Users\\pover\\Desktop\\Projects\\Cs2\\RetakesPlugin\\RetakesPlugin\\Retake.cs",
+              "RelativeDocumentMoniker": "RetakesPlugin\\Retake.cs",
+              "ToolTip": "C:\\Users\\pover\\Desktop\\Projects\\Cs2\\RetakesPlugin\\RetakesPlugin\\Retake.cs",
+              "RelativeToolTip": "RetakesPlugin\\Retake.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAACQAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-04-24T21:52:39.226Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
