@@ -7,7 +7,6 @@ using CounterStrikeSharp.API.Modules.Entities;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
 using CounterStrikeSharp.API.Modules.Utils;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 
 namespace RetakesPlugin
 {
@@ -24,6 +23,36 @@ namespace RetakesPlugin
         private readonly Random _random = new();
 
         private int _lastWinnerTeam = 0;
+        private string _currentMapName = Server.MapName;
+        private static readonly string _serverSettingsCommandBatch = string.Join("; ",
+            "mp_freezetime 0",
+            "mp_teammates_are_enemies 0",
+            "mp_autoteambalance 0",
+            "mp_limitteams 0",
+            "mp_c4timer 40",
+            "mp_ignore_round_win_conditions 0",
+            "mp_give_player_c4 0",
+            "mp_halftime 0",
+            "mp_halftime_duration 0",
+            "mp_match_can_clinch 0",
+            "mp_maxrounds 30",
+            "bot_quota_mode fill",
+            "bot_quota 8",
+            "mp_friendlyfire 0",
+            "bot_difficulty 3",
+            "bot_defer_to_human_goals 0",
+            "bot_defer_to_human_items 0",
+            "bot_chatter off",
+            "bot_allow_grenades 1",
+            "bot_join_after_player 0",
+            "bot_unfreeze",
+            "sv_autobunnyhopping 1",
+            "sv_enablebunnyhopping 1",
+            "mp_buytime 0",
+            "mp_buy_anywhere 0",
+            "mp_buy_during_immunity 0",
+            "mp_startmoney 0",
+            "mp_maxmoney 0");
 
         private List<SpawnPoint> _BSpawns = new();
 
@@ -42,6 +71,7 @@ namespace RetakesPlugin
             RegisterEventHandler<EventWarmupEnd>(OnWarmupEnd);
             RegisterEventHandler<EventRoundStart>(OnRoundRoundStart);
             RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
+            RegisterEventHandler<EventGameEnd>(OnGameEnd);
             RegisterEventHandler<EventRoundFreezeEnd>(OnRoundFreezeEnd);
         }
 
@@ -73,7 +103,7 @@ namespace RetakesPlugin
                 Yaw = ang.Y
             };
 
-            string filePath = Path.Combine(ModuleDirectory, "inferno.json");
+            string filePath = Path.Combine(ModuleDirectory, $"{_currentMapName}.json");
             List<SpawnPoint> spawns = new();
 
             if (File.Exists(filePath))
@@ -113,22 +143,14 @@ namespace RetakesPlugin
         private void OnMapStart(string mapName)
         {
             _BSpawns.Clear();
+            _currentMapName = mapName;
 
             string filePath = Path.Combine(ModuleDirectory, $"{mapName}.json");
 
             if (!File.Exists(filePath))
             {
-                filePath = Path.Combine(ModuleDirectory, "inferno.json");
-
-                if (!File.Exists(filePath))
-                {
-                    filePath = Path.Combine(ModuleDirectory, "spawns.json");
-                    if (!File.Exists(filePath))
-                    {
-                        Console.WriteLine($"[Retake] Error: No spawn file found for {mapName}");
-                        return;
-                    }
-                }
+                Console.WriteLine($"[Retake] Error: No spawn file found for {mapName}");
+                return;
             }
 
             try
@@ -158,7 +180,6 @@ namespace RetakesPlugin
             _planterId = 0;
             _targetSite = _random.Next(2) == 0 ? 'A' : 'B';
 
-            ApplyServerSettings();
             Server.NextFrame(() => Server.ExecuteCommand("mp_restartgame 1"));
             Console.WriteLine("[Retake] Warmup ended, retake mode reinitialized.");
 
@@ -175,7 +196,7 @@ namespace RetakesPlugin
             _planterId = 0;
             _targetSite = _random.Next(2) == 0 ? 'A' : 'B';
 
-            ApplyServerSettings();
+            ApplyServerSettings(); // Better safe than sorry..
 
             Server.NextFrame(() =>
             {
@@ -197,6 +218,20 @@ namespace RetakesPlugin
             _ = info;
 
             _lastWinnerTeam = @event.Winner;
+            return HookResult.Continue;
+        }
+
+        private HookResult OnGameEnd(EventGameEnd @event, GameEventInfo info)
+        {
+            _isRetakeActive = false;
+            _isBombPlanted = false;
+
+            _planterId = 0;
+            _targetSite = '\0';
+
+            _lastWinnerTeam = 0;
+            _currentMapName = Server.MapName;
+
             return HookResult.Continue;
         }
 
@@ -238,35 +273,7 @@ namespace RetakesPlugin
 
         private static void ApplyServerSettings()
         {
-            Server.ExecuteCommand("mp_freezetime 0");
-            Server.ExecuteCommand("mp_teammates_are_enemies 0");
-            Server.ExecuteCommand("mp_autoteambalance 0");
-            Server.ExecuteCommand("mp_limitteams 0");
-            Server.ExecuteCommand("mp_c4timer 40");
-            Server.ExecuteCommand("mp_ignore_round_win_conditions 0");
-            Server.ExecuteCommand("mp_give_player_c4 0");
-            Server.ExecuteCommand("mp_halftime 0");
-            Server.ExecuteCommand("mp_halftime_duration 0");
-            Server.ExecuteCommand("mp_match_can_clinch 0");
-            Server.ExecuteCommand("mp_maxrounds 30");
-            Server.ExecuteCommand("bot_quota_mode fill");
-            Server.ExecuteCommand("bot_quota 8");
-            Server.ExecuteCommand("bot_difficulty 3");
-            Server.ExecuteCommand("bot_defer_to_human_goals 0");
-            Server.ExecuteCommand("bot_defer_to_human_items 0");
-            Server.ExecuteCommand("bot_chatter off");
-            Server.ExecuteCommand("bot_allow_grenades 1");
-            Server.ExecuteCommand("bot_join_after_player 0");
-            Server.ExecuteCommand("mp_autoteambalance 0");
-            Server.ExecuteCommand("mp_limitteams 0");
-            Server.ExecuteCommand("bot_unfreeze");
-            Server.ExecuteCommand("sv_autobunnyhopping 1");
-            Server.ExecuteCommand("sv_enablebunnyhopping 1");
-            Server.ExecuteCommand("mp_buytime 0");
-            Server.ExecuteCommand("mp_buy_anywhere 0");
-            Server.ExecuteCommand("mp_buy_during_immunity 0");
-            Server.ExecuteCommand("mp_startmoney 0");
-            Server.ExecuteCommand("mp_maxmoney 0");
+            Server.ExecuteCommand(_serverSettingsCommandBatch);
 
             Console.WriteLine("[Retake] All server settings applied via Plugin.");
         }
@@ -279,11 +286,12 @@ namespace RetakesPlugin
 
             int tTargetCount = (count == 1) ? 1 : count / 2;
 
-            var sortedPlayers = players.OrderByDescending(p => p.TeamNum == _lastWinnerTeam).ThenBy(p => Guid.NewGuid()).ToList();
+            var prioritizedPlayers = players.OrderByDescending(p => p.TeamNum == _lastWinnerTeam).ToList();
+            ShuffleInPlace(prioritizedPlayers);
 
-            for (int i = 0; i < sortedPlayers.Count; i++)
+            for (int i = 0; i < prioritizedPlayers.Count; i++)
             {
-                var p = sortedPlayers[i];
+                var p = prioritizedPlayers[i];
                 CsTeam nextTeam = (i < tTargetCount) ? CsTeam.Terrorist : CsTeam.CounterTerrorist;
 
                 if (p.TeamNum != (byte)nextTeam)
@@ -397,16 +405,56 @@ namespace RetakesPlugin
 
         private List<SpawnPoint> GetSpawnPoints(string teamPrefix, char site, string type)
         {
-            return _BSpawns
-                .Where(s => IsMatchingSpawn(s.Place, teamPrefix, site, type))
-                .OrderBy(_ => _random.Next())
-                .ToList();
+            var points = _BSpawns.Where(s => IsMatchingSpawn(s.Place, teamPrefix, site, type)).ToList();
+
+            ShuffleInPlace(points);
+            return points;
         }
 
         private static bool IsMatchingSpawn(string place, string teamPrefix, char site, string type)
         {
-            string pattern = $"^{teamPrefix}_{site}[0-9]+_{type}$";
-            return Regex.IsMatch(place, pattern, RegexOptions.IgnoreCase);
+            if (string.IsNullOrWhiteSpace(place))
+            {
+                return false;
+            }
+
+            var parts = place.Split('_', StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 3)
+            {
+                return false;
+            }
+
+            if (!parts[0].Equals(teamPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            if (!parts[2].Equals(type, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var siteWithIndex = parts[1];
+            if (siteWithIndex.Length < 2)
+            {
+                return false;
+            }
+
+            if (char.ToLowerInvariant(siteWithIndex[0]) != char.ToLowerInvariant(site))
+            {
+                return false;
+            }
+
+            return siteWithIndex[1..].All(char.IsDigit);
+        }
+
+        private void ShuffleInPlace<T>(List<T> list)
+        {
+            for (int i = list.Count - 1; i > 0; i--)
+            {
+                int j = _random.Next(i + 1);
+                (list[i], list[j]) = (list[j], list[i]);
+            }
         }
 
         private static SpawnPoint PopSpawn(List<SpawnPoint> points)
