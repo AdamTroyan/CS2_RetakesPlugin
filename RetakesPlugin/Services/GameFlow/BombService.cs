@@ -14,9 +14,9 @@ namespace RetakesPlugin.Services.GameFlow
         }
         public bool PlantBomb()
         {
-            if (_retakeState._isBombPlanted) return false;
+            if (_retakeState.IsBombPlanted) return false;
 
-            var planter = Utilities.GetPlayerFromSteamId(_retakeState._planterId);
+            var planter = Utilities.GetPlayerFromSteamId(_retakeState.PlanterId);
             if (planter == null || planter.PlayerPawn.Value == null) return false;
 
             var pos = planter.PlayerPawn.Value.AbsOrigin!;
@@ -26,7 +26,7 @@ namespace RetakesPlugin.Services.GameFlow
             if (plantedC4 == null || !plantedC4.IsValid) return false;
 
             plantedC4.Teleport(pos, ang, new Vector(0, 0, 0));
-            plantedC4.BombSite = _retakeState._targetSite == 'B' || _retakeState._targetSite == 'b' ? 1 : 0;
+            plantedC4.BombSite = _retakeState.TargetSite == 'B' || _retakeState.TargetSite == 'b' ? 1 : 0;
             plantedC4.DispatchSpawn();
 
             plantedC4.C4Blow = (float)Server.EngineTime + 40.0f;
@@ -39,7 +39,7 @@ namespace RetakesPlugin.Services.GameFlow
             };
             bombEvent.FireEvent(false);
 
-            _retakeState._isBombPlanted = true;
+            _retakeState.IsBombPlanted = true;
             return true;
         }
     }

@@ -38,12 +38,12 @@ namespace RetakesPlugin.Services.GameFlow
                 return false;
             }
 
-            if (_retakeState._targetSite != 'A' && _retakeState._targetSite != 'B')
+            if (_retakeState.TargetSite != 'A' && _retakeState.TargetSite != 'B')
             {
-                _retakeState._targetSite = _random.Next(2) == 0 ? 'A' : 'B';
+                _retakeState.TargetSite = _random.Next(2) == 0 ? 'A' : 'B';
             }
 
-            char site = char.ToLowerInvariant(_retakeState._targetSite);
+            char site = char.ToLowerInvariant(_retakeState.TargetSite);
 
             var tPlantPoints = _spawnSelectionService.GetSpawnPoints(allSpawns, TeamT, site, SpawnTypePlant);
             var tPlayerPoints = _spawnSelectionService.GetSpawnPoints(allSpawns, TeamT, site, SpawnTypePlayer);
@@ -64,11 +64,10 @@ namespace RetakesPlugin.Services.GameFlow
                 if (selectedPoint != null)
                 {
                     pawn.Teleport(new Vector(selectedPoint.X, selectedPoint.Y, selectedPoint.Z), new QAngle(0, selectedPoint.Yaw, 0), new Vector(0, 0, 0));
+                    _loadoutService.RemovePlayerWeapons(pawn);
+                    _loadoutService.GiveLoadout(p);
                     teleportedAnyone = true;
                 }
-
-                _loadoutService.RemovePlayerWeapons(pawn);
-                _loadoutService.GiveLoadout(p);
             }
 
             if (!teleportedAnyone)
@@ -89,7 +88,7 @@ namespace RetakesPlugin.Services.GameFlow
         {
             if (player.TeamNum == 2)
             {
-                if (player.SteamID == _retakeState._planterId && tPlantPoints.Count > 0)
+                if (player.SteamID == _retakeState.PlanterId && tPlantPoints.Count > 0)
                 {
                     return _spawnSelectionService.PopSpawn(tPlantPoints);
                 }

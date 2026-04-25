@@ -22,14 +22,11 @@ namespace RetakesPlugin.Services.GameFlow
         private ServiceProvider _serviceProvider = null!;
         private RetakeState _retakeState = null!;
         private ServerSettingsService _serverSettingsService = null!;
-        private TeamService _teamService = null!;
-        private BombService _bombService = null!;
+        private RoundFlowService _roundFlowService = null!;
         private SpawnRepository _spawnRepository = null!;
-        private PlayerTeleportService _playerTeleportService = null!;
         private readonly Random _random = new();
 
         private List<SpawnPointModel> _spawns = new();
-        private bool _playersTeleportedThisRound;
 
         public override void Load(bool hotReload)
         {
@@ -44,15 +41,14 @@ namespace RetakesPlugin.Services.GameFlow
             services.AddSingleton<SpawnSelectionService>();
             services.AddSingleton<LoadoutService>();
             services.AddSingleton<PlayerTeleportService>();
+            services.AddSingleton<RoundFlowService>();
 
             _serviceProvider = services.BuildServiceProvider();
 
             _retakeState = _serviceProvider.GetRequiredService<RetakeState>();
             _serverSettingsService = _serviceProvider.GetRequiredService<ServerSettingsService>();
-            _teamService = _serviceProvider.GetRequiredService<TeamService>();
-            _bombService = _serviceProvider.GetRequiredService<BombService>();
+            _roundFlowService = _serviceProvider.GetRequiredService<RoundFlowService>();
             _spawnRepository = _serviceProvider.GetRequiredService<SpawnRepository>();
-            _playerTeleportService = _serviceProvider.GetRequiredService<PlayerTeleportService>();
 
             RegisterEvents();
             RegisterCommands();
@@ -109,7 +105,7 @@ namespace RetakesPlugin.Services.GameFlow
                 Yaw = ang.Y
             };
 
-            _spawnRepository.SaveSpawn(ModuleDirectory, _retakeState._currentMapName, newPoint);
+            _spawnRepository.SaveSpawn(ModuleDirectory, _retakeState.CurrentMapName, newPoint);
             player.PrintToChat($" {ChatColors.Green}[Retake] {ChatColors.Default}Point {ChatColors.Gold}{placeName} {ChatColors.Default}saved!");
         }
 
@@ -117,10 +113,14 @@ namespace RetakesPlugin.Services.GameFlow
         {
             _ = info;
 
-            if (Utilities.GetPlayers().Count(p => p.SteamID != 0) == 1)
+            int activeHumanPlayers = Utilities.GetPlayers().Count(p =>
+                p.IsValid
+                && p.SteamID != 0
+                && (p.TeamNum == (byte)CsTeam.Terrorist || p.TeamNum == (byte)CsTeam.CounterTerrorist));
+
+            if (activeHumanPlayers == 0)
             {
                 @event.Userid?.ChangeTeam(CsTeam.Terrorist);
-                _serverSettingsService.StartRetakeIfFirstPlayer(true);
             }
 
             return HookResult.Continue;
@@ -128,7 +128,8 @@ namespace RetakesPlugin.Services.GameFlow
 
         private void OnMapStart(string mapName)
         {
-            _retakeState._currentMapName = mapName;
+            _retakeState.CurrentMapName = mapName;
+            _retakeState.ServerSettingsApplied = false;
 
             _spawns = _spawnRepository.LoadSpawns(ModuleDirectory, mapName);
 
@@ -143,10 +144,7 @@ namespace RetakesPlugin.Services.GameFlow
             _ = @event;
             _ = info;
 
-            ResetRoundState();
-
-            Server.NextFrame(() => Server.ExecuteCommand("mp_restartgame 1"));
-            Console.WriteLine("[Retake] Warmup ended, retake mode reinitialized.");
+            _roundFlowService.HandleWarmupEnd();
 
             return HookResult.Continue;
         }
@@ -156,28 +154,7 @@ namespace RetakesPlugin.Services.GameFlow
             _ = @event;
             _ = info;
 
-            ResetRoundState();
-
-            _serverSettingsService.EnsureApplied();
-
-
-            Server.NextFrame(() =>
-            {
-                _teamService.ShuffleTeam();
-
-                Server.NextFrame(() =>
-                {
-                    _retakeState._planterId = _teamService.SelectRandomPlanter();
-                    _retakeState._isRetakeActive = true;
-                    Console.WriteLine($"[Retake] Selected site for this round: {_retakeState._targetSite}");
-
-                    _playersTeleportedThisRound = _playerTeleportService.TeleportPlayers(_spawns);
-                    if (!_playersTeleportedThisRound)
-                    {
-                        Console.WriteLine("[Retake Warning] RoundStart teleport failed, will retry at FreezeEnd.");
-                    }
-                });
-            });
+            _roundFlowService.HandleRoundStart(_spawns);
 
             return HookResult.Continue;
         }
@@ -185,7 +162,11 @@ namespace RetakesPlugin.Services.GameFlow
         private HookResult OnRoundEnd(EventRoundEnd @event, GameEventInfo info)
         {
             _ = info;
-            _retakeState._lastWinnerTeam = @event.Winner;
+            _roundFlowService.HandleRoundEnd(@event.Winner);
+
+            // Check if now 2 players, if so then kick the bot
+            _roundFlowService.KickBotIf2Players();
+
             return HookResult.Continue;
         }
 
@@ -194,12 +175,7 @@ namespace RetakesPlugin.Services.GameFlow
             _ = @event;
             _ = info;
 
-            _retakeState._isRetakeActive = false;
-            _retakeState._isBombPlanted = false;
-            _retakeState._planterId = 0;
-            _retakeState._targetSite = '\0';
-            _retakeState._lastWinnerTeam = 0;
-            _retakeState._currentMapName = Server.MapName;
+            _roundFlowService.HandleGameEnd();
 
             return HookResult.Continue;
         }
@@ -209,41 +185,9 @@ namespace RetakesPlugin.Services.GameFlow
             _ = @event;
             _ = info;
 
-            if (!_retakeState._isRetakeActive)
-            {
-                _retakeState._targetSite = _random.Next(2) == 0 ? 'A' : 'B';
-                _retakeState._planterId = _teamService.SelectRandomPlanter();
-                _retakeState._isRetakeActive = true;
-                Console.WriteLine("[Retake] FreezeEnd fallback activated retake flow.");
-            }
-
-            if (!_playersTeleportedThisRound && !_playerTeleportService.TeleportPlayers(_spawns))
-            {
-                Console.WriteLine("[Retake Warning] FreezeEnd aborted: teleport phase had no valid spawns.");
-                return HookResult.Continue;
-            }
-
-            _playersTeleportedThisRound = true;
-
-            if (_bombService.PlantBomb())
-            {
-                _retakeState._isRetakeActive = true;
-                _retakeState._isBombPlanted = true;
-
-                Server.PrintToChatAll($" {ChatColors.Green}[Retake] {ChatColors.Default}The bomb is planted on {ChatColors.Gold}{_retakeState._targetSite} {ChatColors.Default}site!");
-                Console.WriteLine($"[Retake Log] New round started on Site {_retakeState._targetSite}");
-            }
+            _roundFlowService.HandleRoundFreezeEnd(_spawns);
 
             return HookResult.Continue;
-        }
-
-        private void ResetRoundState()
-        {
-            _retakeState._isRetakeActive = false;
-            _retakeState._isBombPlanted = false;
-            _retakeState._planterId = 0;
-            _retakeState._targetSite = _random.Next(2) == 0 ? 'A' : 'B';
-            _playersTeleportedThisRound = false;
         }
     }
 }

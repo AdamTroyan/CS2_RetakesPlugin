@@ -1,21 +1,36 @@
 ﻿using CounterStrikeSharp.API;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace RetakesPlugin.Core
 {
     public class RetakeState
     {
-        public bool _isRetakeActive = false;
-        public bool _isBombPlanted = false;
+        public bool IsRetakeActive { get; set; }
+        public bool IsBombPlanted { get; set; }
 
-        public ulong _planterId = 0;
-        public char _targetSite = '\0';
+        public ulong PlanterId { get; set; }
+        public char TargetSite { get; set; }
 
-        public int _lastWinnerTeam = 0;
-        public string _currentMapName = Server.MapName;
+        public int LastWinnerTeam { get; set; }
+        public string CurrentMapName { get; set; } = Server.MapName;
+
+        public bool ServerSettingsApplied { get; set; }
+
+        public void ResetRound(Random random) 
+        {
+            IsRetakeActive = false;
+            IsBombPlanted = false;
+            PlanterId = 0;
+            TargetSite = random.Next(2) == 0 ? 'A' : 'B';
+        }
+
+        public void ResetMatch(string mapName)
+        {
+            IsRetakeActive = false;
+            IsBombPlanted = false;
+            PlanterId = 0;
+            TargetSite = '\0';
+            LastWinnerTeam = 0;
+            CurrentMapName = mapName;
+        }
     }
 }
