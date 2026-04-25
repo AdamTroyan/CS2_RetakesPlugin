@@ -121,6 +121,7 @@ namespace RetakesPlugin.Services.GameFlow
             if (activeHumanPlayers == 0)
             {
                 @event.Userid?.ChangeTeam(CsTeam.Terrorist);
+                Server.ExecuteCommand("mp_restartgame 1"); 
             }
 
             return HookResult.Continue;

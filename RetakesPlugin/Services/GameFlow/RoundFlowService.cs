@@ -49,8 +49,6 @@ namespace RetakesPlugin.Services.GameFlow
 
             Server.NextFrame(() =>
             {
-                _teamService.ShuffleTeam();
-
                 Server.NextFrame(() =>
                 {
                     _retakeState.PlanterId = _teamService.SelectRandomPlanter();
@@ -69,6 +67,8 @@ namespace RetakesPlugin.Services.GameFlow
         public void HandleRoundEnd(int winnerTeam)
         {
             _retakeState.LastWinnerTeam = winnerTeam;
+
+            _teamService.ShuffleTeam();
         }
 
         public void HandleGameEnd()

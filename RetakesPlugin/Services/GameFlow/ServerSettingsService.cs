@@ -14,6 +14,7 @@ namespace RetakesPlugin.Services.GameFlow
         {
             Server.ExecuteCommand("mp_freezetime 3");
             Server.ExecuteCommand("mp_c4timer 40");
+            Server.ExecuteCommand("mp_roundtime_defuse 2");
             Server.ExecuteCommand("mp_warmuptime 5");
 
             Server.ExecuteCommand("mp_teammates_are_enemies 0");
