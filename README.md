@@ -1,46 +1,66 @@
-# Retakes Plugin (CS2)
+# Retakes Plugin (CS2) - v2.0
 
-My second **CounterStrikeSharp (CSS)** project for Counter-Strike 2.
+A CounterStrikeSharp plugin for Counter-Strike 2 that runs a full Retakes flow with automatic team setup, teleport, bomb planting, and loadouts.
 
-A robust, high-performance **CounterStrikeSharp** plugin for Counter-Strike 2 that runs a full Retakes experience with automatic round flow, bomb setup, team balancing, spawn teleporting, and loadout control.
+## Current Status
 
-## 🚀 Current Features (v1.0.0)
+This project was refactored from one large file into a service-based structure with Dependency Injection.
 
-* **Automatic Retake Flow:**
-  * Initializes and resets retake state on warmup/round events.
-  * Chooses site flow and planter automatically.
-* **Smart Team Management:**
-  * Auto-shuffles teams each round.
-  * Balances Terrorists and Counter-Terrorists dynamically.
-* **Bomb & Round Setup:**
-  * Auto-selects a planter.
-  * Spawns and configures planted C4 in plugin flow.
-* **Spawn System:**
-  * Loads map spawns from JSON (`inferno.json`, fallback to `inferno.json`).
-  * Teleports players to role-based spawn points (T plant/T player/CT player).
-* **Loadout Control:**
-  * Clears current weapons before round setup.
-  * Gives role-appropriate weapons and utility gear.
-* **Server Configuration Automation:**
-  * Applies retake-focused server cvars each round.
-  * Enables stable practice settings for consistent gameplay.
+Main areas:
 
-## 🛠 Installation
+- Game flow services (round lifecycle, team logic, bomb setup, loadouts)
+- Spawn services (spawn filtering and random selection)
+- Persistence (JSON spawn load/save)
+- Shared core state
 
-1. Ensure you have [CounterStrikeSharp](https://github.com/rofl0l/CounterStrikeSharp) installed on your server.
-2. Build the project and place the plugin output folder into:
+## Features
+
+- Automatic retake flow on warmup and round events
+- Team shuffle and random planter selection
+- Role-based spawn teleporting (T plant, T player, CT player)
+- Early teleport attempt on round start, with freeze-end fallback
+- Automatic planted C4 creation and setup
+- Automatic player loadout reset and weapon assignment
+- Server cvar setup for retake gameplay
+- Spawn save command for live setup from inside the server
+
+## Spawn Format
+
+Spawn points are saved per map in a JSON file named:
+
+- `<mapname>.json`
+
+Spawn place naming pattern:
+
+- `<team>_<site><index>_<type>`
+
+Examples:
+
+- `t_a1_plant`
+- `t_a2_player`
+- `ct_b1_player`
+
+Valid values:
+
+- `team`: `t` or `ct`
+- `site`: `a` or `b`
+- `type`: `plant` or `player`
+
+## Installation
+
+1. Install CounterStrikeSharp on your CS2 server.
+2. Build this project.
+3. Copy plugin output to:
    `game/csgo/addons/counterstrikesharp/plugins/RetakesPlugin`
-3. Restart the server or load the plugin with the relevant CSS command.
+4. Restart the server or load the plugin.
 
-## ⌨️ Commands
+## Commands
 
-* `css_save <place>`: Saves a retake spawn point to JSON (client-only command).
+- `css_save <place>`
+  Saves a spawn point to the current map JSON file (client-only).
 
-## 🔮 Upcoming Features (v1.1.0 - In Development)
+## Notes for Online Servers
 
-The next version is planned to focus on **better control, analytics, and quality-of-life** updates:
-
-* **Round Analytics:** Better round summaries and server-side metrics.
-* **Config Expansion:** Easier tuning for weapons, timing, and team ratios.
-* **Admin Utility Commands:** More tools for setup, validation, and live control.
-* **Spawn Validation:** Improved checks and clearer diagnostics for invalid/missing spawn entries.
+- Make sure each map has enough spawn points for your expected player count.
+- If warmup transition timing looks off on your server, tune the warmup-end delay in server settings service.
+- Test on your target tickrate and real player load before production rollout.
