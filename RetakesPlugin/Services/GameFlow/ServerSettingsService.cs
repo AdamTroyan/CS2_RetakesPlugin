@@ -5,9 +5,17 @@ namespace RetakesPlugin.Services.GameFlow
 {
     public class ServerSettingsService
     {
+        private readonly RetakeLogger _logger;
+
+        public ServerSettingsService(RetakeLogger logger)
+        {
+            _logger = logger;
+        }
+
         public void EnsureApplied()
         {
             Apply();
+            _logger.Debug("ServerSettingsApplied", "Retake server settings applied.");
         }
 
         private static void Apply()

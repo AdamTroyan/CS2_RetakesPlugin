@@ -2,8 +2,10 @@ using CounterStrikeSharp;
 using CounterStrikeSharp.API;
 using CounterStrikeSharp.API.Core;
 using CounterStrikeSharp.API.Core.Attributes.Registration;
+using CounterStrikeSharp.API.Modules.Admin;
 using CounterStrikeSharp.API.Modules.Commands;
 using CounterStrikeSharp.API.Modules.Entities.Constants;
+using CounterStrikeSharp.API.Modules.Timers;
 using CounterStrikeSharp.API.Modules.Utils;
 using Microsoft.Extensions.DependencyInjection;
 using RetakesPlugin.Core;
@@ -23,7 +25,13 @@ namespace RetakesPlugin.Services.GameFlow
         private RetakeState _retakeState = null!;
         private ServerSettingsService _serverSettingsService = null!;
         private RoundFlowService _roundFlowService = null!;
+        private TeamService _teamService = null!;
+        private InstaDefuse _instaDefuse = null!;
+        private AfkService _afkService = null!;
         private SpawnRepository _spawnRepository = null!;
+        private RetakeLogger _logger = null!;
+        private CommandRateLimitService _commandRateLimitService = null!;
+        private RetakeCommands _retakeCommands = null!;
         private readonly Random _random = new();
 
         private List<SpawnPointModel> _spawns = new();
@@ -34,26 +42,44 @@ namespace RetakesPlugin.Services.GameFlow
 
             services.AddSingleton(_random);
             services.AddSingleton<RetakeState>();
+            services.AddSingleton<RetakeLogger>();
+            services.AddSingleton<CommandRateLimitService>();
             services.AddSingleton<ServerSettingsService>();
             services.AddSingleton<TeamService>();
             services.AddSingleton<BombService>();
+            services.AddSingleton<InstaDefuse>();
+            services.AddSingleton<AfkService>();
             services.AddSingleton<SpawnRepository>();
             services.AddSingleton<SpawnSelectionService>();
             services.AddSingleton<LoadoutService>();
             services.AddSingleton<PlayerTeleportService>();
             services.AddSingleton<RoundFlowService>();
+            services.AddSingleton<RetakeCommands>();
 
             _serviceProvider = services.BuildServiceProvider();
 
             _retakeState = _serviceProvider.GetRequiredService<RetakeState>();
+            _logger = _serviceProvider.GetRequiredService<RetakeLogger>();
+            _commandRateLimitService = _serviceProvider.GetRequiredService<CommandRateLimitService>();
             _serverSettingsService = _serviceProvider.GetRequiredService<ServerSettingsService>();
             _roundFlowService = _serviceProvider.GetRequiredService<RoundFlowService>();
+            _teamService = _serviceProvider.GetRequiredService<TeamService>();
+            _instaDefuse = _serviceProvider.GetRequiredService<InstaDefuse>();
+            _afkService = _serviceProvider.GetRequiredService<AfkService>();
             _spawnRepository = _serviceProvider.GetRequiredService<SpawnRepository>();
+            _retakeCommands = _serviceProvider.GetRequiredService<RetakeCommands>();
 
             RegisterEvents();
-            RegisterCommands();
 
-            Console.WriteLine("Retakes Plugin is loaded.");
+            AddTimer(1.0f, _afkService.CheckAfkPlayers, CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+            AddTimer(30.0f, () => _logger.Debug("LogCounters", _logger.GetCountersSnapshot()), CounterStrikeSharp.API.Modules.Timers.TimerFlags.REPEAT);
+
+            _logger.Info("PluginLoaded", "Retakes plugin is loaded.");
+        }
+
+        public void Todo()
+        {
+
         }
 
         public override void Unload(bool hotReload)
@@ -64,79 +90,114 @@ namespace RetakesPlugin.Services.GameFlow
         private void RegisterEvents()
         {
             RegisterEventHandler<EventPlayerConnectFull>(OnPlayerConnectFull);
+            RegisterEventHandler<EventHegrenadeDetonate>(OnHeGrenadeDetonate);
+            RegisterEventHandler<EventMolotovDetonate>(OnMolotovDetonate);
+            RegisterEventHandler<EventInfernoStartburn>(OnInfernoStartBurn);
+            RegisterEventHandler<EventInfernoExpire>(OnInfernoExpire);
             RegisterListener<Listeners.OnMapStart>(OnMapStart);
             RegisterEventHandler<EventWarmupEnd>(OnWarmupEnd);
             RegisterEventHandler<EventRoundStart>(OnRoundRoundStart);
             RegisterEventHandler<EventRoundEnd>(OnRoundEnd);
             RegisterEventHandler<EventGameEnd>(OnGameEnd);
             RegisterEventHandler<EventRoundFreezeEnd>(OnRoundFreezeEnd);
+            RegisterEventHandler<EventBombBegindefuse>(OnBombBeginDefuse);
         }
 
-        private void RegisterCommands()
+        [ConsoleCommand("jointeam", "Restrict manual team join")]
+        [CommandHelper(minArgs: 0, usage: "", whoCanExecute: CommandUsage.CLIENT_ONLY)]
+        public void OnJoinTeamCommand(CCSPlayerController? player, CommandInfo info)
         {
-            AddCommand("jointeam", "Restrict manual team join", (player, info) =>
-            {
-                if (player != null)
-                {
-                    player.PrintToChat($" {ChatColors.Red}Teams are managed automatically!");
-                }
-            });
+            _retakeCommands.HandleJoinTeam(player, info);
         }
 
+        [RequiresPermissions("@css/root")]
+        [ConsoleCommand("css_retake_debug", "Toggle retake debug logs")]
+        [CommandHelper(minArgs: 0, usage: "[on|off|1|0]", whoCanExecute: CommandUsage.CLIENT_ONLY)]
+        public void OnRetakeDebugCommand(CCSPlayerController? player, CommandInfo info)
+        {
+            _retakeCommands.HandleRetakeDebug(player, info);
+        }
+
+        [RequiresPermissions("@css/root")]
+        [ConsoleCommand("css_logstats", "Print retake log counters")]
+        [CommandHelper(minArgs: 0, usage: "", whoCanExecute: CommandUsage.CLIENT_ONLY)]
+        public void OnLogStatsCommand(CCSPlayerController? player, CommandInfo info)
+        {
+            _retakeCommands.HandleLogStats(player, info);
+        }
+
+        [RequiresPermissions("@css/root")]
         [ConsoleCommand("css_save", "Saves a retake spawn point")]
         [CommandHelper(minArgs: 1, usage: "<place>", whoCanExecute: CommandUsage.CLIENT_ONLY)]
         public void OnSaveCommand(CCSPlayerController? player, CommandInfo info)
         {
-            if (player == null || !player.IsValid || player.PlayerPawn.Value == null)
-            {
-                return;
-            }
-
-            string placeName = info.ArgByIndex(1);
-            var pos = player.PlayerPawn.Value.AbsOrigin!;
-            var ang = player.PlayerPawn.Value.AbsRotation!;
-
-            var newPoint = new SpawnPointModel
-            {
-                Place = placeName,
-                X = pos.X,
-                Y = pos.Y,
-                Z = pos.Z,
-                Yaw = ang.Y
-            };
-
-            _spawnRepository.SaveSpawn(ModuleDirectory, _retakeState.CurrentMapName, newPoint);
-            player.PrintToChat($" {ChatColors.Green}[Retake] {ChatColors.Default}Point {ChatColors.Gold}{placeName} {ChatColors.Default}saved!");
+            _retakeCommands.HandleSaveSpawn(ModuleDirectory, player, info);
         }
 
         private HookResult OnPlayerConnectFull(EventPlayerConnectFull @event, GameEventInfo info)
         {
             _ = info;
 
-            int activeHumanPlayers = Utilities.GetPlayers().Count(p =>
-                p.IsValid
-                && p.SteamID != 0
-                && (p.TeamNum == (byte)CsTeam.Terrorist || p.TeamNum == (byte)CsTeam.CounterTerrorist));
+            _roundFlowService.HandlePlayerConnectFull(@event.Userid);
 
-            if (activeHumanPlayers == 0)
-            {
-                @event.Userid?.ChangeTeam(CsTeam.Terrorist);
-                Server.ExecuteCommand("mp_restartgame 1"); 
-            }
+            return HookResult.Continue;
+        }
 
+        [GameEventHandler]
+        public HookResult OnBombBeginDefuse(EventBombBegindefuse @event, GameEventInfo info)
+        {
+            _ = info;
+
+            _instaDefuse.HandleBombBeginDefuse(@event);
+
+            return HookResult.Continue;
+        }
+
+        private HookResult OnHeGrenadeDetonate(EventHegrenadeDetonate @event, GameEventInfo info)
+        {
+            _ = info;
+
+            _instaDefuse.RegisterHeThreat(@event);
+            return HookResult.Continue;
+        }
+
+        private HookResult OnMolotovDetonate(EventMolotovDetonate @event, GameEventInfo info)
+        {
+            _ = info;
+
+            _instaDefuse.RegisterMolotovThreat(@event);
+            return HookResult.Continue;
+        }
+
+        private HookResult OnInfernoStartBurn(EventInfernoStartburn @event, GameEventInfo info)
+        {
+            _ = info;
+
+            _instaDefuse.RegisterInfernoThreatStart(@event);
+            return HookResult.Continue;
+        }
+
+        private HookResult OnInfernoExpire(EventInfernoExpire @event, GameEventInfo info)
+        {
+            _ = info;
+
+            _instaDefuse.RegisterInfernoThreatExpire(@event);
             return HookResult.Continue;
         }
 
         private void OnMapStart(string mapName)
         {
             _retakeState.CurrentMapName = mapName;
-            _retakeState.ServerSettingsApplied = false;
 
             _spawns = _spawnRepository.LoadSpawns(ModuleDirectory, mapName);
 
             if (_spawns.Count > 0)
             {
-                Console.WriteLine($"[Retake] Success: Loaded {_spawns.Count} points from {mapName}.json");
+                _logger.Info("SpawnsLoaded", $"Loaded {_spawns.Count} points from {mapName}.json");
+            }
+            else
+            {
+                _logger.Warning("SpawnsMissing", $"No spawn points loaded for {mapName}.");
             }
         }
 
@@ -155,7 +216,15 @@ namespace RetakesPlugin.Services.GameFlow
             _ = @event;
             _ = info;
 
-            _roundFlowService.HandleRoundStart(_spawns);
+            try
+            {
+                _instaDefuse.ResetThreats();
+                _roundFlowService.HandleRoundStart(_spawns);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("OnRoundStartFailed", "Unhandled exception in round start flow.", ex);
+            }
 
             return HookResult.Continue;
         }
@@ -165,7 +234,6 @@ namespace RetakesPlugin.Services.GameFlow
             _ = info;
             _roundFlowService.HandleRoundEnd(@event.Winner);
 
-            // Check if now 2 players, if so then kick the bot
             _roundFlowService.KickBotIf2Players();
 
             return HookResult.Continue;
@@ -186,7 +254,14 @@ namespace RetakesPlugin.Services.GameFlow
             _ = @event;
             _ = info;
 
-            _roundFlowService.HandleRoundFreezeEnd(_spawns);
+            try
+            {
+                _roundFlowService.HandleRoundFreezeEnd(_spawns);
+            }
+            catch (Exception ex)
+            {
+                _logger.Error("OnRoundFreezeEndFailed", "Unhandled exception in round freeze end flow.", ex);
+            }
 
             return HookResult.Continue;
         }

@@ -1,4 +1,5 @@
 ﻿using RetakesPlugin.Models;
+using RetakesPlugin.Services.GameFlow;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
@@ -9,13 +10,19 @@ namespace RetakesPlugin.Persistence
     {
         private static readonly JsonSerializerOptions _writeOptions = new() { WriteIndented = true };
         private static readonly object _fileLock = new();
+        private readonly RetakeLogger _logger;
+
+        public SpawnRepository(RetakeLogger logger)
+        {
+            _logger = logger;
+        }
 
         public List<SpawnPoint> LoadSpawns(string moduleDirectory, string mapName)
         {
             string filePath = Path.Combine(moduleDirectory, $"{mapName}.json");
             if (!File.Exists(filePath))
             {
-                Console.WriteLine($"[Retake] Error: No spawn file found for {mapName}");
+                _logger.Warning("SpawnFileMissing", $"No spawn file found for map {mapName}.");
                 return new List<SpawnPoint>();
             }
 
@@ -26,7 +33,7 @@ namespace RetakesPlugin.Persistence
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Retake] Critical Error loading JSON: {ex.Message}");
+                _logger.Error("SpawnLoadFailed", "Critical error loading spawn JSON.", ex);
                 return new List<SpawnPoint>();
             }
         }
@@ -47,13 +54,14 @@ namespace RetakesPlugin.Persistence
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"[Retake Error] Failed to read JSON: {ex.Message}");
+                        _logger.Error("SpawnReadFailed", "Failed to read existing spawn JSON before save.", ex);
                     }
                 }
 
                 spawns.Add(point);
                 string outputJson = JsonSerializer.Serialize(spawns, _writeOptions);
                 File.WriteAllText(filePath, outputJson);
+                _logger.Info("SpawnSavedToDisk", $"Spawn saved to {Path.GetFileName(filePath)}. Total points: {spawns.Count}.");
             }
         }
     }

@@ -20,13 +20,15 @@ namespace RetakesPlugin.Services.GameFlow
         private readonly RetakeState _retakeState;
         private readonly SpawnSelectionService _spawnSelectionService;
         private readonly LoadoutService _loadoutService;
+        private readonly RetakeLogger _logger;
         private readonly Random _random;
 
-        public PlayerTeleportService(RetakeState retakeState, SpawnSelectionService spawnSelectionService, LoadoutService loadoutService, Random random)
+        public PlayerTeleportService(RetakeState retakeState, SpawnSelectionService spawnSelectionService, LoadoutService loadoutService, RetakeLogger logger, Random random)
         {
             _retakeState = retakeState;
             _spawnSelectionService = spawnSelectionService;
             _loadoutService = loadoutService;
+            _logger = logger;
             _random = random;
         }
 
@@ -34,7 +36,7 @@ namespace RetakesPlugin.Services.GameFlow
         {
             if (allSpawns.Count == 0)
             {
-                Console.WriteLine("[Retake Warning] No spawn points loaded. Teleport phase skipped.");
+                _logger.Warning("TeleportNoSpawns", "No spawn points loaded. Teleport phase skipped.");
                 return false;
             }
 
@@ -72,7 +74,11 @@ namespace RetakesPlugin.Services.GameFlow
 
             if (!teleportedAnyone)
             {
-                Console.WriteLine("[Retake Warning] No valid spawn was found for alive players.");
+                _logger.Warning("TeleportNoValidSpawn", "No valid spawn was found for alive players.");
+            }
+            else
+            {
+                _logger.Debug("TeleportCompleted", "Teleport/loadout pass completed for alive players.");
             }
 
             return teleportedAnyone;

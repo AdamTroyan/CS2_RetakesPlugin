@@ -1,4 +1,5 @@
 ﻿using CounterStrikeSharp.API;
+using System.Collections.Generic;
 
 namespace RetakesPlugin.Core
 {
@@ -9,11 +10,12 @@ namespace RetakesPlugin.Core
 
         public ulong PlanterId { get; set; }
         public char TargetSite { get; set; }
+        public int RoundNumber { get; set; }
 
         public int LastWinnerTeam { get; set; }
         public string CurrentMapName { get; set; } = Server.MapName;
 
-        public bool ServerSettingsApplied { get; set; }
+        public Dictionary<ulong, bool> _isPlayerAFK { get; } = new();
 
         public void ResetRound(Random random) 
         {
@@ -29,8 +31,10 @@ namespace RetakesPlugin.Core
             IsBombPlanted = false;
             PlanterId = 0;
             TargetSite = '\0';
+            RoundNumber = 0;
             LastWinnerTeam = 0;
             CurrentMapName = mapName;
+            _isPlayerAFK.Clear();
         }
     }
 }
